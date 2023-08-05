@@ -1,9 +1,9 @@
 package com.flipkart;
 
 
-import com.google.common.collect.Maps;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.streaming.Duration;
 import org.apache.spark.streaming.api.java.JavaInputDStream;
@@ -42,7 +42,7 @@ public class SparkConsumer {
 
         Set<String> topics = Collections.singleton("travel"); // Set your Kafka topic(s)
 
-        JavaInputDStream<ConsumerRecord<Object, Object>> kafkaStream =
+        JavaInputDStream<ConsumerRecord<String, String>> kafkaStream =
                 KafkaUtils.createDirectStream(
                         jssc,
                         LocationStrategies.PreferConsistent(),
@@ -55,18 +55,24 @@ public class SparkConsumer {
                         "Received message: topic = %s, partition = %d, offset = %d, key = %s, value = %s%n",
                         record.topic(), record.partition(), record.offset(), record.key(), record.value()
                 );
-//                String val = (String) record.value();
-//                JavaEsSpark.saveToEs(val, "travel");
             });
+            JavaRDD<HashMap> toIngest = rdd.map(SparkConsumer::test);
 
-            if (!rdd.isEmpty()) {
+            if (!toIngest.isEmpty()) {
                 System.out.println("Writing to ES");
-                JavaEsSpark.saveToEs(rdd.map(ConsumerRecord::value), "travel"); // Set your Elasticsearch index and type
+                JavaEsSpark.saveToEs(toIngest, "travel"); // Set your Elasticsearch index and type
             }
         });
 
         jssc.start();
         jssc.awaitTermination();
+    }
+
+    public static HashMap<String, String> test(ConsumerRecord<String, String> contentsPerPartition) {
+        HashMap<String, String> hm = new HashMap<>();
+        hm.put("id", "1");
+        hm.put("name", contentsPerPartition.value());
+        return hm;
     }
 }
 
